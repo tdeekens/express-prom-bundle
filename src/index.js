@@ -45,25 +45,28 @@ function main(opts) {
       includeStatusCode: true,
       normalizePath: main.normalizePath,
       formatStatusCode: main.normalizeStatusCode,
-      promClient: {}
+      promClient: {},
     },
     opts
   );
   if (arguments[2] && arguments[1] && arguments[1].send) {
-    arguments[1].status(500)
-      .send('<h1>500 Error</h1>\n'
-        + '<p>Unexpected 3rd param in express-prom-bundle.\n'
-        + '<p>Did you just put express-prom-bundle into app.use '
-        + 'without calling it as a function first?');
+    arguments[1]
+      .status(500)
+      .send(
+        '<h1>500 Error</h1>\n'
+          + '<p>Unexpected 3rd param in express-prom-bundle.\n'
+          + '<p>Did you just put express-prom-bundle into app.use '
+          + 'without calling it as a function first?'
+      );
     return;
   }
 
   if (opts.prefix || opts.keepDefaultMetrics !== undefined) {
     throw new Error(
       'express-prom-bundle detected obsolete options:'
-      + 'prefix and/or keepDefaultMetrics. '
-      + 'Please refer to oficial docs. '
-      + 'Most likely you upgraded the module without necessary code changes'
+        + 'prefix and/or keepDefaultMetrics. '
+        + 'Please refer to oficial docs. '
+        + 'Most likely you upgraded the module without necessary code changes'
     );
   }
 
@@ -71,35 +74,50 @@ function main(opts) {
     promClient.collectDefaultMetrics(opts.promClient.collectDefaultMetrics);
   }
 
-  const httpMetricName = opts.httpDurationMetricName || 'http_request_duration_seconds';
+  const httpDurationMetricName = opts.httpDurationMetricName || 'http_request_duration_seconds';
+  const httpBucketMetricName = opts.httpBucketMetricName || 'http_request_buckets_seconds';
 
-  const metricTemplates = {
-    'up': () => new promClient.Gauge({
-      name: 'up',
-      help: '1 = up, 0 = not up'
-    }),
-    [httpMetricName]: () => {
-      const labels = ['status_code'];
-      if (opts.includeMethod) {
-        labels.push('method');
-      }
-      if (opts.includePath) {
-        labels.push('path');
-      }
-      if (opts.customLabels){
-        labels.push.apply(labels, Object.keys(opts.customLabels));
-      }
-      const metric = new promClient.Histogram({
-        name: httpMetricName,
-        help: 'duration histogram of http responses labeled with: ' + labels.join(', '),
-        labelNames: labels,
-        buckets: opts.buckets || [0.003, 0.03, 0.1, 0.3, 1.5, 10]
-      });
-      return metric;
+  const createMetricTemplates = () => {
+    const labels = ['status_code'];
+    if (opts.includeMethod) {
+      labels.push('method');
     }
+    if (opts.includePath) {
+      labels.push('path');
+    }
+    if (opts.customLabels) {
+      labels.push.apply(labels, Object.keys(opts.customLabels));
+    }
+
+    return {
+      up: () =>
+        new promClient.Gauge({
+          name: 'up',
+          help: '1 = up, 0 = not up',
+        }),
+      [httpDurationMetricName]: () => {
+        const metric = new promClient.Summary({
+          name: httpDurationMetricName,
+          help: 'duration summary of http responses labeled with: ' + labels.join(', '),
+          labelNames: labels,
+          percentiles: opts.percentiles || [0.5, 0.9, 0.99],
+        });
+        return metric;
+      },
+      [httpBucketMetricName]: () => {
+        const metric = new promClient.Histogram({
+          name: httpBucketMetricName,
+          help: 'duration histogram of http responses labeled with: ' + labels.join(', '),
+          labelNames: labels,
+          buckets: opts.buckets || [0.003, 0.03, 0.1, 0.3, 1.5, 10],
+        });
+        return metric;
+      },
+    };
   };
 
   const metrics = {};
+  const metricTemplates = createMetricTemplates();
   const names = prepareMetricNames(opts, metricTemplates);
 
   for (let name of names) {
@@ -115,7 +133,7 @@ function main(opts) {
     res.end(promClient.register.metrics());
   };
 
-  const middleware = function (req, res, next) {
+  const middleware = function(req, res, next) {
     const path = req.originalUrl || req.url; // originalUrl gets lost in koa-connect?
     let labels;
 
@@ -127,28 +145,28 @@ function main(opts) {
       return next();
     }
 
-    if (metrics[httpMetricName]) {
-      labels = {};
-      let timer = metrics[httpMetricName].startTimer(labels);
-      onFinished(res, () => {
-        if (opts.includeStatusCode) {
-          labels.status_code = opts.formatStatusCode(res, opts);
-        }
-        if (opts.includeMethod) {
-          labels.method = req.method;
-        }
-        if (opts.includePath) {
-          labels.path = opts.normalizePath(req, opts);
-        }
-        if (opts.customLabels) {
-          Object.assign(labels, opts.customLabels);
-        }
-        if (opts.transformLabels) {
-          opts.transformLabels(labels, req, res);
-        }
-        timer();
-      });
-    }
+    labels = {};
+    let bucketTimer = metrics[httpBucketMetricName].startTimer(labels) || () => {};
+    let durationTimer = metrics[httpDurationMetricName].startTimer(labels) || () => {};
+    onFinished(res, () => {
+      if (opts.includeStatusCode) {
+        labels.status_code = opts.formatStatusCode(res, opts);
+      }
+      if (opts.includeMethod) {
+        labels.method = req.method;
+      }
+      if (opts.includePath) {
+        labels.path = opts.normalizePath(req, opts);
+      }
+      if (opts.customLabels) {
+        Object.assign(labels, opts.customLabels);
+      }
+      if (opts.transformLabels) {
+        opts.transformLabels(labels, req, res);
+      }
+      bucketTimer();
+      durationTimer();
+    });
 
     next();
   };
