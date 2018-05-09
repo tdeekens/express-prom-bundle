@@ -17,57 +17,67 @@ describe('index', () => {
   it('metrics returns up=1', done => {
     const app = express();
     const bundled = bundle({
-      whitelist: ['up']
+      whitelist: ['up'],
     });
     app.use(bundled);
     app.use('/test', (req, res) => res.send('it worked'));
 
     const agent = supertest(app);
     agent.get('/test').end(() => {
-      agent
-        .get('/metrics')
-        .end((err, res) => {
-          expect(res.status).toBe(200);
-          expect(res.text).toMatch(/up\s1/);
-          done();
-        });
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/up\s1/);
+        done();
+      });
     });
   });
 
-  it('httpDurationMetricName overrides histogram metric name', done => {
+  it('httpDurationMetricName overrides summary metric name', done => {
     const app = express();
     const bundled = bundle({
-      httpDurationMetricName: 'my_http_duration'
+      httpDurationMetricName: 'my_http_duration',
     });
     app.use(bundled);
 
     const agent = supertest(app);
-    agent.get('/metrics')
-      .end((err, res) => {
-        expect(res.text).toMatch(/my_http_duration/m);
-        done();
-      });
+    agent.get('/metrics').end((err, res) => {
+      expect(res.text).toMatch(/my_http_duration/m);
+      done();
+    });
+  });
+
+  it('httpBucketMetricName overrides histogram metric name', done => {
+    const app = express();
+    const bundled = bundle({
+      httpBucketMetricName: 'my_http_buckets',
+    });
+    app.use(bundled);
+
+    const agent = supertest(app);
+    agent.get('/metrics').end((err, res) => {
+      expect(res.text).toMatch(/my_http_buckets/m);
+      done();
+    });
   });
 
   it('metrics should be attached to /metrics by default', done => {
     const app = express();
     const bundled = bundle({
-      whitelist: ['up']
+      whitelist: ['up'],
     });
     app.use(bundled);
 
     const agent = supertest(app);
-    agent.get('/metrics')
-      .end((err, res) => {
-        expect(res.status).toBe(200);
-        done();
-      });
+    agent.get('/metrics').end((err, res) => {
+      expect(res.status).toBe(200);
+      done();
+    });
   });
 
   it('metrics can be attached to /metrics programatically', done => {
     const app = express();
     const bundled = bundle({
-      autoregister: false
+      autoregister: false,
     });
     app.use(bundled.metricsMiddleware);
     app.use(bundled);
@@ -75,11 +85,10 @@ describe('index', () => {
     app.use('/test', (req, res) => res.send('it worked'));
 
     const agent = supertest(app);
-    agent.get('/metrics')
-      .end((err, res) => {
-        expect(res.status).toBe(200);
-        done();
-      });
+    agent.get('/metrics').end((err, res) => {
+      expect(res.status).toBe(200);
+      done();
+    });
   });
 
   it('metrics can be filtered using exect match', () => {
@@ -119,44 +128,36 @@ describe('index', () => {
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        const metricHashMap = instance.metrics.http_request_duration_seconds.hashMap;
-        expect(metricHashMap['status_code:200']).toBeDefined();
-        const labeled = metricHashMap['status_code:200'];
-        expect(labeled.count).toBe(1);
+    agent.get('/test').end(() => {
+      const metricHashMap = instance.metrics.http_request_duration_seconds.hashMap;
+      expect(metricHashMap['status_code:200']).toBeDefined();
+      const labeled = metricHashMap['status_code:200'];
+      expect(labeled.count).toBe(1);
 
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            done();
-          });
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        done();
       });
+    });
   });
 
   it('filters out the excludeRoutes', done => {
     const app = express();
     const instance = bundle({
-      excludeRoutes: ['/test']
+      excludeRoutes: ['/test'],
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        const metricHashMap = instance.metrics.http_request_duration_seconds.hashMap;
-        expect(metricHashMap['status_code:200']).not.toBeDefined();
+    agent.get('/test').end(() => {
+      const metricHashMap = instance.metrics.http_request_duration_seconds.hashMap;
+      expect(metricHashMap['status_code:200']).not.toBeDefined();
 
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            done();
-          });
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        done();
       });
+    });
   });
 
   it('complains about deprecated options', () => {
@@ -168,21 +169,17 @@ describe('index', () => {
     const instance = bundle({
       includePath: true,
       includeMethod: true,
-      includeCustomLabels: {foo: 'bar'}
+      includeCustomLabels: {foo: 'bar'},
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        done();
       });
+    });
   });
 
   it('normalizePath can be replaced gloablly', done => {
@@ -195,103 +192,83 @@ describe('index', () => {
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            expect(res.text).toMatch(/"dummy"/m);
-            bundle.normalizePath = original;
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/"dummy"/m);
+        bundle.normalizePath = original;
+        done();
       });
+    });
   });
 
   it('normalizePath can be overridden', done => {
     const app = express();
     const instance = bundle({
       includePath: true,
-      normalizePath: req => req.originalUrl + '-suffixed'
+      normalizePath: req => req.originalUrl + '-suffixed',
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            expect(res.text).toMatch(/"\/test-suffixed"/m);
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/"\/test-suffixed"/m);
+        done();
       });
+    });
   });
 
   it('formatStatusCode can be overridden', done => {
     const app = express();
     const instance = bundle({
-      formatStatusCode: () => 555
+      formatStatusCode: () => 555,
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            expect(res.text).toMatch(/555/);
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/555/);
+        done();
       });
+    });
   });
 
   it('includeStatusCode=false removes status_code label from metrics', done => {
     const app = express();
     const instance = bundle({
-      includeStatusCode: false
+      includeStatusCode: false,
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            expect(res.text).not.toMatch(/="200"/);
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).not.toMatch(/="200"/);
+        done();
       });
+    });
   });
 
   it('customLabels={foo: "bar"} adds foo="bar" label to metrics', done => {
     const app = express();
     const instance = bundle({
-      customLabels: {foo: 'bar'}
+      customLabels: {foo: 'bar'},
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            expect(res.text).toMatch(/foo="bar"/);
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/foo="bar"/);
+        done();
       });
+    });
   });
 
   it('tarnsformLabels can set label values', done => {
@@ -302,45 +279,39 @@ describe('index', () => {
       transformLabels: labels => {
         labels.foo = 'baz';
         labels.path += '/ok';
-      }
+      },
     });
     app.use(instance);
     app.use('/test', (req, res) => res.send('it worked'));
     const agent = supertest(app);
-    agent
-      .get('/test')
-      .end(() => {
-        agent
-          .get('/metrics')
-          .end((err, res) => {
-            expect(res.status).toBe(200);
-            expect(res.text).toMatch(/foo="baz"/);
-            expect(res.text).toMatch(/path="\/test\/ok"/);
-            done();
-          });
+    agent.get('/test').end(() => {
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/foo="baz"/);
+        expect(res.text).toMatch(/path="\/test\/ok"/);
+        done();
       });
+    });
   });
 
   it('Koa: metrics returns up=1', done => {
     const app = new Koa();
     const bundled = bundle({
-      whitelist: ['up']
+      whitelist: ['up'],
     });
     app.use(c2k(bundled));
 
     app.use(function(ctx, next) {
-      return next().then(() => ctx.body = 'it worked');
+      return next().then(() => (ctx.body = 'it worked'));
     });
 
     const agent = supertestKoa(app);
     agent.get('/test').end(() => {
-      agent
-        .get('/metrics')
-        .end((err, res) => {
-          expect(res.status).toBe(200);
-          expect(res.text).toMatch(/^up\s1/m);
-          done();
-        });
+      agent.get('/metrics').end((err, res) => {
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/^up\s1/m);
+        done();
+      });
     });
   });
 
@@ -349,9 +320,9 @@ describe('index', () => {
     bundle({
       promClient: {
         collectDefaultMetrics: {
-          timeout: 3000
-        }
-      }
+          timeout: 3000,
+        },
+      },
     });
     expect(spy).toHaveBeenCalledWith({timeout: 3000});
   });
