@@ -11,7 +11,8 @@
     "method"
   ],
   "scripts": {
-    "test": "node_modules/jasme/run.js"
+    "test": "node_modules/jasme/run.js",
+    "format": "prettier --write 'src/**/*.js'"
   },
   "author": "Konstantin Pogorelov <or@pluseq.com>",
   "license": "MIT",
@@ -21,6 +22,7 @@
     "url-value-parser": "^1.0.0"
   },
   "devDependencies": {
+    "prettier": "1.12.1",
     "coveralls": "^2.13.1",
     "eslint": "^3.19.0",
     "express": "^4.15.3",
