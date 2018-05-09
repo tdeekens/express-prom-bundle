@@ -146,27 +146,32 @@ function main(opts) {
     }
 
     labels = {};
-    let bucketTimer = metrics[httpBucketMetricName].startTimer(labels) || () => {};
-    let durationTimer = metrics[httpDurationMetricName].startTimer(labels) || () => {};
-    onFinished(res, () => {
-      if (opts.includeStatusCode) {
-        labels.status_code = opts.formatStatusCode(res, opts);
-      }
-      if (opts.includeMethod) {
-        labels.method = req.method;
-      }
-      if (opts.includePath) {
-        labels.path = opts.normalizePath(req, opts);
-      }
-      if (opts.customLabels) {
-        Object.assign(labels, opts.customLabels);
-      }
-      if (opts.transformLabels) {
-        opts.transformLabels(labels, req, res);
-      }
-      bucketTimer();
-      durationTimer();
-    });
+    let bucketTimer = metrics[httpBucketMetricName] ? metrics[httpBucketMetricName].startTimer(labels) : function() {};
+    let durationTimer = metrics[httpDurationMetricName]
+      ? metrics[httpDurationMetricName].startTimer(labels)
+      : function() {};
+
+    if (metrics[httpBucketMetricName] || metrics[httpDurationMetricName]) {
+      onFinished(res, () => {
+        if (opts.includeStatusCode) {
+          labels.status_code = opts.formatStatusCode(res, opts);
+        }
+        if (opts.includeMethod) {
+          labels.method = req.method;
+        }
+        if (opts.includePath) {
+          labels.path = opts.normalizePath(req, opts);
+        }
+        if (opts.customLabels) {
+          Object.assign(labels, opts.customLabels);
+        }
+        if (opts.transformLabels) {
+          opts.transformLabels(labels, req, res);
+        }
+        bucketTimer();
+        durationTimer();
+      });
+    }
 
     next();
   };
